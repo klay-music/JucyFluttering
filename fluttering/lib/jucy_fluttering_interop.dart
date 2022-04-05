@@ -4,26 +4,28 @@ import 'package:ffi/ffi.dart';
 import 'dart:isolate';
 
 // loading juce library and also initialising native messanging
-DynamicLibrary loadJuceLibrary() {
-  DynamicLibrary lib;
+DynamicLibrary? loadJuceLibrary() {
+  DynamicLibrary? lib;
   try {
     lib = (Platform.isAndroid)
         ? DynamicLibrary.open('libjuce_jni.so')
         : // for android juce is a dyn. lib
         DynamicLibrary.process(); // else juce is statically linked;
-  } catch (e) {}
+  } catch (e) {
+    print("Error ${Platform.isAndroid ? "opening" : "processing"} JUCE: $e");
+  }
   if (lib == null) {
     print('unable to load juce library');
   } else {
     print('dart loaded juce lib');
-    initNativeMessenging(lib);
+    initNativeMessaging(lib);
   }
 
-  return lib;
+  return lib!;
 }
 
 // messenging, see https://github.com/mraleph/go_dart_ffi_example
-void initNativeMessenging(DynamicLibrary juce) async {
+void initNativeMessaging(DynamicLibrary juce) async {
   // initialize the native dart API
   final initializeApi = juce.lookupFunction<IntPtr Function(Pointer<Void>),
       int Function(Pointer<Void>)>("InitializeDartApi");
@@ -51,30 +53,31 @@ final juce = loadJuceLibrary();
 
 // see https://pub.flutter-io.cn/packages/ffi/example
 String fromUtf8AndFree(Pointer<Utf8> utf8Ptr) {
-  String resultString = Utf8.fromUtf8(utf8Ptr);
-  free(utf8Ptr);
+  String resultString = utf8Ptr.toDartString();
+  calloc.free(utf8Ptr);
   return resultString;
 }
 
 // === simple c++ function calls ==============================================
 
+final int Function(int numberIn) testFunc = (int) => -5000;
 // Get C function reference, put it into a variable.
 final int Function(int numberIn) juceCalcIncrement = (juce == null)
-    ? ([int]) => -1111111111 // if juce library not available
-    : juce
+    ? (int) => -1111111111 // if juce library not available
+    : juce!
         .lookup<NativeFunction<Int32 Function(Int32)>>('calcIncrement')
         .asFunction();
 
-final Pointer<Utf8> Function() juceGetAppNameUTF8 = (juce == null)
+final Pointer<Utf8>? Function() juceGetAppNameUTF8 = (juce == null)
     ? () => null
-    : juce
+    : juce!
         .lookup<NativeFunction<Pointer<Utf8> Function()>>('getAppName')
         .asFunction();
 
 String getAppName() {
-  if (juce == null) return "";
-  // else
-  return fromUtf8AndFree(juceGetAppNameUTF8());
+  if (juce == null) return "JUCE IS MISSING (1))";
+  final result = juceGetAppNameUTF8();
+  return (result == null) ? "JUCE is MISSING (2)" : fromUtf8AndFree(result);
 }
 
 // === callback example ========================================================
